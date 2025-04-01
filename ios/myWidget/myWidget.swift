@@ -1,88 +1,99 @@
-//
-//  myWidget.swift
-//  myWidget
-//
-//  Created by Guillermo Guevara on 31-03-25.
-//
 
 import WidgetKit
 import SwiftUI
 
-struct Provider: AppIntentTimelineProvider {
+// Modelo para los textos guardados
+struct SavedText: Identifiable, Codable {
+    let id: String
+    let text: String
+}
+
+struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: ConfigurationAppIntent())
+        SimpleEntry(date: Date(), savedTexts: [])
     }
 
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: configuration)
+    func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
+        let savedTexts = fetchSavedTexts()
+        let entry = SimpleEntry(date: Date(), savedTexts: savedTexts)
+        completion(entry)
     }
     
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> ()) {
         var entries: [SimpleEntry] = []
 
-        // Generate a timeline consisting of five entries an hour apart, starting from the current date.
+        let savedTexts = fetchSavedTexts()
         let currentDate = Date()
-        for hourOffset in 0 ..< 5 {
-            let entryDate =    Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, configuration: configuration)
-            entries.append(entry)
-        }
+        let entry = SimpleEntry(date: currentDate, savedTexts: savedTexts)
+        entries.append(entry)
 
-        return Timeline(entries: entries, policy: .atEnd)
+        let nextUpdateDate = Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
+        let timeline = Timeline(entries: entries, policy: .after(nextUpdateDate))
+        completion(timeline)
     }
-
-//    func relevances() async -> WidgetRelevances<ConfigurationAppIntent> {
-//        // Generate a list containing the contexts this widget is relevant in.
-//    }
+    
+    // Función para obtener los textos guardados del storage compartido
+    private func fetchSavedTexts() -> [SavedText] {
+        guard let sharedDefaults = UserDefaults(suiteName: "group.com.yourcompany.7io-locale.shared"),
+              let savedTextsString = sharedDefaults.string(forKey: "savedTexts"),
+              let data = savedTextsString.data(using: .utf8) else {
+            return []
+        }
+        
+        do {
+            let decodedTexts = try JSONDecoder().decode([SavedText].self, from: data)
+            return decodedTexts
+        } catch {
+            print("Error decoding saved texts: \(error)")
+            return []
+        }
+    }
 }
 
 struct SimpleEntry: TimelineEntry {
     let date: Date
-    let configuration: ConfigurationAppIntent
+    let savedTexts: [SavedText]
 }
 
 struct myWidgetEntryView : View {
     var entry: Provider.Entry
 
     var body: some View {
-        VStack {
-            Text("Time:")
-            Text(entry.date, style: .time)
-
-            Text("Favorite Emoji:")
-            Text(entry.configuration.favoriteEmoji)
+        VStack(alignment: .leading) {
+            Text("Eventos de hoy:")
+                .font(.headline)
+                .padding(.bottom, 4)
+            
+            if entry.savedTexts.isEmpty {
+                Text("No hay eventos guardados")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            } else {
+                // Mostrar solo los eventos, bien simple como pediste
+                ForEach(entry.savedTexts) { text in
+                    Text(text.text)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .padding(.vertical, 2)
+                }
+            }
         }
+        .padding()
     }
 }
 
+@main
 struct myWidget: Widget {
     let kind: String = "myWidget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
             myWidgetEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .padding()
+                .background(Color(UIColor.systemBackground))
         }
+        .configurationDisplayName("Mis Eventos")
+        .description("Muestra tus eventos para hoy")
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
-}
-
-extension ConfigurationAppIntent {
-    fileprivate static var smiley: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "😀"
-        return intent
-    }
-    
-    fileprivate static var starEyes: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "🤩"
-        return intent
-    }
-}
-
-#Preview(as: .systemSmall) {
-    myWidget()
-} timeline: {
-    SimpleEntry(date: .now, configuration: .smiley)
-    SimpleEntry(date: .now, configuration: .starEyes)
 }

@@ -176,5 +176,5 @@ export const transformEventsToCardFormat = (events: Evento[]): EventCardData[] =
       rawStartTime,
       rawEndTime
     };
-  });
+  });    
 };
