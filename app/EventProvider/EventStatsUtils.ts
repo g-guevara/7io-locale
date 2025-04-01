@@ -1,5 +1,7 @@
 // app/EventStatsUtils.ts
 import { Evento, EventCardData, TimeGap, CARD_COLORS, parseTime } from "./EventStatsTypes";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { NativeModules } from 'react-native';
 
 /**
  * Calculate time gaps between events
@@ -42,9 +44,6 @@ export const calculateTimeGaps = (events: EventCardData[]): TimeGap[] => {
 };
 
 /**
- * Filter events for today
- */
-/**
  * Filter events for today based on day of week
  */
 export const filterTodayEvents = (events: Evento[]): Evento[] => {
@@ -53,7 +52,7 @@ export const filterTodayEvents = (events: Evento[]): Evento[] => {
     const todayDayOfWeek = diasSemana[today.getDay()];
     
     console.log(`Día de la semana actual: ${todayDayOfWeek}`);
-    console.log(`Total de eventos guardados: ${events.length}`)   ;
+    console.log(`Total de eventos guardados: ${events.length}`);
     
     // Filter events that match the current day of week
     const filteredEvents = events.filter(event => {
@@ -79,8 +78,43 @@ export const filterTodayEvents = (events: Evento[]): Evento[] => {
     });
     
     console.log(`Eventos filtrados para hoy (${todayDayOfWeek}): ${filteredEvents.length}`);
+    
+    // Save today's events for the widget
+    saveEventsForWidget(filteredEvents);
+    
     return filteredEvents;
-  };
+};
+
+/**
+ * Save events for the widget to access
+ */
+export const saveEventsForWidget = async (events: Evento[]) => {
+  try {
+    // Prepare data for widget - just the basic event text for simplicity
+    const widgetEvents = events.map(event => ({
+      id: event._id,
+      text: event.Evento // Just show the full event title
+    }));
+    
+    // Convert to string for storage
+    const jsonValue = JSON.stringify(widgetEvents);
+    
+    // Save to AsyncStorage as backup
+    await AsyncStorage.setItem('widgetEvents', jsonValue);
+    
+    // Also save to UserDefaults shared with widget
+    if (NativeModules.SharedStorage) {
+      NativeModules.SharedStorage.set(
+        "savedTexts", // Using the same key as in resetnativelocale for compatibility
+        jsonValue
+      );
+    } else {
+      console.log("SharedStorage module not available");
+    }
+  } catch (error) {
+    console.error('Error saving events for widget:', error);
+  }
+};
 
 /**
  * Transform the event data to the format needed for the cards
